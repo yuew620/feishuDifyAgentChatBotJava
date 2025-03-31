@@ -136,11 +136,15 @@ public class DifyServiceImpl implements DifyService {
         Long lastSendTime = lastSendTimeMap.get(userId);
         
         if (lastSendTime == null || currentTime - lastSendTime >= SEND_INTERVAL) {
-            DifyResponse bufferedResponse = DifyResponse.builder()
-                    .event("agent_message")
-                    .answer(messageBuffer.toString())
-                    .conversationId(conversationId)
-                    .build();
+            DifyResponse bufferedResponse = new DifyResponse(
+                "agent_message",  // event
+                null,            // task
+                null,            // id
+                messageBuffer.toString(), // answer
+                conversationId,  // conversationId
+                null,            // usage
+                null             // message
+            );
             onResponse.accept(bufferedResponse);
             messageBuffer.setLength(0);
             lastSendTimeMap.put(userId, currentTime);
