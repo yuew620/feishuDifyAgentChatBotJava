@@ -1,8 +1,11 @@
 package com.sdxpub.feishubot.service.card;
 
 import com.sdxpub.feishubot.model.feishu.FeishuCard;
+import com.sdxpub.feishubot.model.message.Message;
 import com.sdxpub.feishubot.service.feishu.FeishuService;
 import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -13,9 +16,9 @@ import java.time.format.DateTimeFormatter;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 
-@Slf4j
 @Component
 public class CardPool {
+    private static final Logger log = LoggerFactory.getLogger(CardPool.class);
     private static final int INITIAL_POOL_SIZE = 20;
     private static final int MIN_POOL_SIZE = 5;
     private static final int MAX_RETRIES = 3;
@@ -106,7 +109,11 @@ public class CardPool {
                     LocalDateTime.now().format(timeFormatter));
             
             try {
-                FeishuCard card = feishuService.createCard();
+                Message message = Message.builder()
+                    .userId("system")
+                    .messageId("pool-" + System.currentTimeMillis())
+                    .build();
+                FeishuCard card = feishuService.createCard(message).get();
                 card.setExpireTime(System.currentTimeMillis() + 24 * 60 * 60 * 1000); // 24小时过期
                 
                 cardPool.offer(card);

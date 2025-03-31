@@ -1,16 +1,10 @@
 package com.sdxpub.feishubot.model.feishu;
 
-import lombok.Data;
-import lombok.Builder;
-import lombok.NoArgsConstructor;
-import lombok.AllArgsConstructor;
+import lombok.*;
 
 import java.time.LocalDateTime;
 
 @Data
-@Builder
-@NoArgsConstructor
-@AllArgsConstructor
 public class FeishuCard {
     private String cardId;
     private String userId;
@@ -19,6 +13,15 @@ public class FeishuCard {
     private CardStatus status;
     private LocalDateTime createdAt;
     private LocalDateTime lastUpdateTime;
+    private long expireTime;
+
+    public void setExpireTime(long expireTime) {
+        this.expireTime = expireTime;
+    }
+
+    public String getCardId() {
+        return cardId;
+    }
 
     public enum CardStatus {
         CREATING,    // 卡片正在创建中
@@ -27,16 +30,20 @@ public class FeishuCard {
         FAILED      // 卡片创建或更新失败
     }
 
+    public boolean isExpired() {
+        return System.currentTimeMillis() > expireTime;
+    }
+
     public static FeishuCard createNew(String userId, String messageId) {
         LocalDateTime now = LocalDateTime.now();
-        return FeishuCard.builder()
-                .userId(userId)
-                .messageId(messageId)
-                .content("")
-                .status(CardStatus.CREATING)
-                .createdAt(now)
-                .lastUpdateTime(now)
-                .build();
+        FeishuCard card = new FeishuCard();
+        card.userId = userId;
+        card.messageId = messageId;
+        card.content = "";
+        card.status = CardStatus.CREATING;
+        card.createdAt = now;
+        card.lastUpdateTime = now;
+        return card;
     }
 
     public void updateContent(String newContent) {

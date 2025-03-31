@@ -8,8 +8,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReentrantLock;
 
-@Data
 @Slf4j
+@Data
 public class MessageBuffer {
     private final String userId;
     private final String messageId;
@@ -18,6 +18,14 @@ public class MessageBuffer {
     private final AtomicBoolean cardReady;
     private final AtomicLong lastSendTime;
     private ScheduledFuture<?> flushTimer;
+
+    public void setFlushTimer(ScheduledFuture<?> flushTimer) {
+        this.flushTimer = flushTimer;
+    }
+
+    public ScheduledFuture<?> getFlushTimer() {
+        return flushTimer;
+    }
 
     public MessageBuffer(String userId, String messageId) {
         this.userId = userId;

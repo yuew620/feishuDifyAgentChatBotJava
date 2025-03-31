@@ -13,7 +13,11 @@ import lombok.extern.slf4j.Slf4j;
 import okhttp3.*;
 import org.springframework.stereotype.Service;
 
+import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStreamReader;
+import java.util.Timer;
+import java.util.TimerTask;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
@@ -44,7 +48,7 @@ public class DifyServiceImpl implements DifyService {
         try {
             RequestBody requestBody = createRequestBody(request);
             Request httpRequest = new Request.Builder()
-                    .url(difyProperties.getApiEndpoint() + "/chat-messages")
+                    .url("http://dify.sdx.pub/v1/chat-messages")
                     .addHeader("Authorization", "Bearer " + difyProperties.getApiKey())
                     .post(requestBody)
                     .build();
@@ -112,12 +116,98 @@ public class DifyServiceImpl implements DifyService {
     }
 
     private RequestBody createRequestBody(DifyRequest request) {
-        // 实现请求体创建逻辑
-        return null; // TODO: 实现具体的请求体创建逻辑
+        MediaType mediaType = MediaType.parse("application/json");
+        String jsonBody = String.format(
+            "{\"inputs\":{\"history\":\"null\"},\"query\":\"%s\",\"user\":\"%s\",\"response_mode\":\"streaming\"%s}",
+            request.getQuery().replace("\"", "\\\""),
+            request.getUser(),
+            request.getConversationId() != null ? ",\"conversation_id\":\"" + request.getConversationId() + "\"" : ""
+        );
+        return RequestBody.create(jsonBody, mediaType);
+    }
+
+    private static final long SEND_INTERVAL = 100; // 发送间隔100ms
+    private static final long BUFFER_TIMEOUT = SEND_INTERVAL * 3; // 缓冲区超时时间
+    private final Map<String, Long> lastSendTimeMap = new ConcurrentHashMap<>();
+    private final Map<String, Timer> bufferTimers = new ConcurrentHashMap<>();
+
+    private void sendBufferedMessage(String userId, StringBuilder messageBuffer, Consumer<DifyResponse> onResponse, String conversationId) {
+        long currentTime = System.currentTimeMillis();
+        Long lastSendTime = lastSendTimeMap.get(userId);
+        
+        if (lastSendTime == null || currentTime - lastSendTime >= SEND_INTERVAL) {
+            DifyResponse bufferedResponse = DifyResponse.builder()
+                    .event("agent_message")
+                    .answer(messageBuffer.toString())
+                    .conversationId(conversationId)
+                    .build();
+            onResponse.accept(bufferedResponse);
+            messageBuffer.setLength(0);
+            lastSendTimeMap.put(userId, currentTime);
+        }
+    }
+
+    private void resetBufferTimer(String userId, StringBuilder messageBuffer, Consumer<DifyResponse> onResponse, String conversationId) {
+        Timer oldTimer = bufferTimers.get(userId);
+        if (oldTimer != null) {
+            oldTimer.cancel();
+        }
+
+        Timer timer = new Timer();
+        timer.schedule(new TimerTask() {
+            @Override
+            public void run() {
+                if (messageBuffer.length() > 0) {
+                    sendBufferedMessage(userId, messageBuffer, onResponse, conversationId);
+                }
+                timer.cancel();
+                bufferTimers.remove(userId);
+            }
+        }, BUFFER_TIMEOUT);
+        
+        bufferTimers.put(userId, timer);
     }
 
     private void handleStreamingResponse(Response response, String userId, Consumer<DifyResponse> onResponse) {
-        // 实现流式响应处理逻辑
-        // TODO: 实现具体的流式响应处理逻辑
+        try (ResponseBody responseBody = response.body()) {
+            if (responseBody == null) {
+                throw new BotException(ErrorCode.DIFY_API_ERROR, "Empty response body");
+            }
+
+            StringBuilder messageBuffer = new StringBuilder();
+            BufferedReader reader = new BufferedReader(new InputStreamReader(responseBody.byteStream()));
+            String line;
+            
+            while ((line = reader.readLine()) != null) {
+                if (line.startsWith("data: ")) {
+                    String jsonData = line.substring(6);
+                    DifyResponse difyResponse = DifyResponse.fromJson(jsonData);
+                    handleResponse(difyResponse, userId);
+
+                    if ("agent_message".equals(difyResponse.getEvent())) {
+                        if (difyResponse.getAnswer() != null && !difyResponse.getAnswer().isEmpty()) {
+                            messageBuffer.append(difyResponse.getAnswer());
+                            resetBufferTimer(userId, messageBuffer, onResponse, difyResponse.getConversationId());
+                        }
+                    } else {
+                        // 非agent_message消息触发发送
+                        if (messageBuffer.length() > 0) {
+                            sendBufferedMessage(userId, messageBuffer, onResponse, difyResponse.getConversationId());
+                        }
+                        
+                        if ("message_end".equals(difyResponse.getEvent())) {
+                            Timer timer = bufferTimers.remove(userId);
+                            if (timer != null) {
+                                timer.cancel();
+                            }
+                            removeConversation(userId);
+                            lastSendTimeMap.remove(userId);
+                        }
+                    }
+                }
+            }
+        } catch (IOException e) {
+            throw new BotException(ErrorCode.DIFY_API_ERROR, "Error reading streaming response: " + e.getMessage());
+        }
     }
 }

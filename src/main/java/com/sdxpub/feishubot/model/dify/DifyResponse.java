@@ -1,6 +1,8 @@
 package com.sdxpub.feishubot.model.dify;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import java.io.IOException;
 import lombok.Data;
 import lombok.Builder;
 import lombok.NoArgsConstructor;
@@ -47,6 +49,16 @@ public class DifyResponse {
 
     public boolean hasAnswer() {
         return answer != null && !answer.isEmpty();
+    }
+
+    private static final ObjectMapper objectMapper = new ObjectMapper();
+
+    public static DifyResponse fromJson(String json) {
+        try {
+            return objectMapper.readValue(json, DifyResponse.class);
+        } catch (IOException e) {
+            throw new RuntimeException("Error parsing Dify response: " + e.getMessage(), e);
+        }
     }
 
     public DifyMessage toDifyMessage(String userId) {

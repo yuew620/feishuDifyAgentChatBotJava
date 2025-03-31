@@ -9,6 +9,10 @@ spring:
     caffeine:
       spec: maximumSize=1000,expireAfterWrite=12h
 
+dify:
+  api-endpoint: ${AI_API_URL}
+  api-key: ${AI_API_KEY}
+
 feishu:
   app-id: ${FEISHU_APP_ID}
   app-secret: ${FEISHU_APP_SECRET}

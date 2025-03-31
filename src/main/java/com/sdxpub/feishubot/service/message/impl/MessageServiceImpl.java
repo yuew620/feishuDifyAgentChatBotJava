@@ -12,18 +12,24 @@ import com.sdxpub.feishubot.service.feishu.FeishuService;
 import com.sdxpub.feishubot.service.message.MessageService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
+import com.sdxpub.feishubot.model.feishu.FeishuCard;
+import com.sdxpub.feishubot.model.dify.DifyMessage;
+import com.sdxpub.feishubot.service.card.CardPool;
 
-@Slf4j
 @Service
 @RequiredArgsConstructor
 public class MessageServiceImpl implements MessageService {
+    private static final Logger log = LoggerFactory.getLogger(MessageServiceImpl.class);
 
     private final DifyService difyService;
     private final FeishuService feishuService;
@@ -62,21 +68,23 @@ public class MessageServiceImpl implements MessageService {
         return CompletableFuture.runAsync(() -> {
             try {
                 // 从卡片池获取预创建的卡片
-                FeishuCard card = cardPool.getCard();
-                if (card == null) {
+                FeishuCard initialCard = cardPool.getCard();
+                if (initialCard == null) {
                     throw new BotException(ErrorCode.FEISHU_CARD_CREATE_ERROR, "Failed to get card from pool");
                 }
 
                 // 发送卡片给用户
-                feishuService.sendCard(message, card)
+                feishuService.sendCard(message, initialCard)
                     .thenAccept(success -> {
                         if (success) {
                             buffer.setCardReady(true);
                         } else {
                             // 如果发送失败，可能是卡片过期，重试一次
-                            card = cardPool.getCard();
-                            feishuService.sendCard(message, card)
-                                .thenAccept(retrySuccess -> buffer.setCardReady(retrySuccess));
+                            FeishuCard retryCard = cardPool.getCard();
+                            if (retryCard != null) {
+                                feishuService.sendCard(message, retryCard)
+                                    .thenAccept(retrySuccess -> buffer.setCardReady(retrySuccess));
+                            }
                         }
                     });
             } catch (Exception e) {
