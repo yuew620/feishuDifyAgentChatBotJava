@@ -10,13 +10,14 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.HashMap;
 import java.util.Map;
 
-@Slf4j
 @RestController
 @RequestMapping("/webhook")
 @RequiredArgsConstructor
 public class WebhookController {
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(WebhookController.class);
 
     private final MessageService messageService;
 
@@ -26,7 +27,9 @@ public class WebhookController {
         
         // 处理飞书的challenge验证
         if (payload.containsKey("challenge")) {
-            return ResponseEntity.ok(Map.of("challenge", payload.get("challenge").toString()));
+            Map<String, String> response = new HashMap<>();
+            response.put("challenge", payload.get("challenge").toString());
+            return ResponseEntity.ok(response);
         }
 
         try {
@@ -47,16 +50,23 @@ public class WebhookController {
             // 异步处理消息
             messageService.handleMessage(message);
 
-            return ResponseEntity.ok(Map.of("code", "0"));
+            Map<String, String> response = new HashMap<>();
+            response.put("code", "0");
+            return ResponseEntity.ok(response);
         } catch (Exception e) {
             log.error("Failed to handle event", e);
-            return ResponseEntity.ok(Map.of("code", "1", "message", e.getMessage()));
+            Map<String, String> response = new HashMap<>();
+            response.put("code", "1");
+            response.put("message", e.getMessage());
+            return ResponseEntity.ok(response);
         }
     }
 
     @PostMapping("/card")
     public ResponseEntity<Map<String, String>> handleCard(@RequestBody Map<String, Object> payload) {
         log.debug("Received card webhook: {}", payload);
-        return ResponseEntity.ok(Map.of("code", "0"));
+        Map<String, String> response = new HashMap<>();
+        response.put("code", "0");
+        return ResponseEntity.ok(response);
     }
 }
