@@ -9,10 +9,17 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReentrantLock;
 
 @Slf4j
-@Data
 public class MessageBuffer {
     private final String userId;
     private final String messageId;
+
+    public String getUserId() {
+        return userId;
+    }
+
+    public String getMessageId() {
+        return messageId;
+    }
     private final StringBuilder content;
     private final ReentrantLock lock;
     private final AtomicBoolean cardReady;

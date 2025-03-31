@@ -45,10 +45,14 @@ public class MessageServiceImpl implements MessageService {
     public void handleMessage(Message message) {
         String userId = message.getUserId();
         String messageId = message.getMessageId();
+        log.info("[MessageService] Starting to handle message - ID: {}, User: {}", messageId, userId);
+        
         MessageBuffer buffer = getOrCreateBuffer(userId, messageId);
+        log.info("[MessageService] Created/Retrieved message buffer for message ID: {}", messageId);
 
         try {
             // 并行处理卡片创建和消息发送
+            log.info("[MessageService] Starting parallel processing for message ID: {}", messageId);
             CompletableFuture<Void> cardFuture = handleCardCreation(message, buffer);
             CompletableFuture<Void> difyFuture = handleDifyMessage(message);
 
@@ -67,21 +71,27 @@ public class MessageServiceImpl implements MessageService {
     private CompletableFuture<Void> handleCardCreation(Message message, MessageBuffer buffer) {
         return CompletableFuture.runAsync(() -> {
             try {
+                log.info("[MessageService] Attempting to get card from pool for message ID: {}", message.getMessageId());
                 // 从卡片池获取预创建的卡片
                 FeishuCard initialCard = cardPool.getCard();
                 if (initialCard == null) {
+                    log.error("[MessageService] Failed to get card from pool for message ID: {}", message.getMessageId());
                     throw new BotException(ErrorCode.FEISHU_CARD_CREATE_ERROR, "Failed to get card from pool");
                 }
+                log.info("[MessageService] Successfully got card from pool: {}", initialCard.getCardId());
 
                 // 发送卡片给用户
+                log.info("[MessageService] Sending card {} to user for message ID: {}", initialCard.getCardId(), message.getMessageId());
                 feishuService.sendCard(message, initialCard)
                     .thenAccept(success -> {
                         if (success) {
                             buffer.setCardReady(true);
                         } else {
+                            log.warn("[MessageService] Failed to send initial card, attempting retry for message ID: {}", message.getMessageId());
                             // 如果发送失败，可能是卡片过期，重试一次
                             FeishuCard retryCard = cardPool.getCard();
                             if (retryCard != null) {
+                                log.info("[MessageService] Retrying with new card {} for message ID: {}", retryCard.getCardId(), message.getMessageId());
                                 feishuService.sendCard(message, retryCard)
                                     .thenAccept(retrySuccess -> buffer.setCardReady(retrySuccess));
                             }

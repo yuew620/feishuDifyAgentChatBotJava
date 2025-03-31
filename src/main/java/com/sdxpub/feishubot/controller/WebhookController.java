@@ -38,9 +38,12 @@ public class WebhookController {
             String messageId = event.get("message_id").toString();
             String userId = event.get("sender").toString();
             String content = event.get("content").toString();
+            
+            log.info("[Webhook] Received message - ID: {}, User: {}, Content: {}", messageId, userId, content);
 
             // 创建消息对象
             Message message = Message.createTextMessage(userId, messageId, content);
+            log.info("[Webhook] Created Message object: {}", message);
 
             // 异步处理消息
             messageService.handleMessage(message);
