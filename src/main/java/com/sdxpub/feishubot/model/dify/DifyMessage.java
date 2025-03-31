@@ -22,27 +22,87 @@ public class DifyMessage {
         return answer != null && !answer.isEmpty();
     }
 
+    public DifyMessage() {
+    }
+
+    public DifyMessage(String conversationId, String userId, String query, String answer, MessageType type, String messageId) {
+        this.conversationId = conversationId;
+        this.userId = userId;
+        this.query = query;
+        this.answer = answer;
+        this.type = type;
+        this.messageId = messageId;
+    }
+
+    public String getConversationId() {
+        return conversationId;
+    }
+
+    public void setConversationId(String conversationId) {
+        this.conversationId = conversationId;
+    }
+
+    public String getUserId() {
+        return userId;
+    }
+
+    public void setUserId(String userId) {
+        this.userId = userId;
+    }
+
+    public String getQuery() {
+        return query;
+    }
+
+    public void setQuery(String query) {
+        this.query = query;
+    }
+
+    public String getAnswer() {
+        return answer;
+    }
+
+    public void setAnswer(String answer) {
+        this.answer = answer;
+    }
+
+    public MessageType getType() {
+        return type;
+    }
+
+    public void setType(MessageType type) {
+        this.type = type;
+    }
+
+    public String getMessageId() {
+        return messageId;
+    }
+
+    public void setMessageId(String messageId) {
+        this.messageId = messageId;
+    }
+
     public static DifyMessage createUserMessage(String userId, String query) {
-        return DifyMessage.builder()
-                .userId(userId)
-                .query(query)
-                .type(MessageType.USER)
-                .build();
+        DifyMessage message = new DifyMessage();
+        message.setUserId(userId);
+        message.setQuery(query);
+        message.setType(MessageType.USER);
+        return message;
     }
 
     public static DifyMessage createAgentMessage(String userId, String answer) {
-        return DifyMessage.builder()
-                .userId(userId)
-                .answer(answer)
-                .type(MessageType.AGENT)
-                .build();
+        DifyMessage message = new DifyMessage();
+        message.setUserId(userId);
+        message.setAnswer(answer);
+        message.setType(MessageType.AGENT);
+        return message;
     }
 
     public static DifyMessage createAssistantMessage(String userId, String messageId) {
-        return DifyMessage.builder()
-                .userId(userId)
-                .messageId(messageId)
-                .type(MessageType.ASSISTANT)
-                .build();
+        DifyMessage message = new DifyMessage();
+        message.setUserId(userId);
+        message.setMessageId(messageId);
+        message.setType(MessageType.ASSISTANT);
+        return message;
     }
 }
