@@ -151,13 +151,14 @@ public class DifyResponse {
     }
 
     public DifyMessage toDifyMessage(String userId) {
-        DifyMessage message = new DifyMessage();
-        message.setUserId(userId);
-        message.setConversationId(conversationId);
-        message.setAnswer(answer);
-        message.setMessageId(id);
-        message.setType(isAgentMessage() ? DifyMessage.MessageType.AGENT : DifyMessage.MessageType.ASSISTANT);
-        return message;
+        return new DifyMessage(
+            conversationId,
+            userId,
+            null,  // query
+            answer,
+            isAgentMessage() ? DifyMessage.MessageType.AGENT : DifyMessage.MessageType.ASSISTANT,
+            id
+        );
     }
 
 }
