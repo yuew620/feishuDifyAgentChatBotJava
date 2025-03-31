@@ -40,12 +40,7 @@ public class WebhookController {
             String content = event.get("content").toString();
 
             // 创建消息对象
-            Message message = Message.builder()
-                    .messageId(messageId)
-                    .userId(userId)
-                    .content(content)
-                    .type(Message.MessageType.TEXT)
-                    .build();
+            Message message = Message.createTextMessage(userId, messageId, content);
 
             // 异步处理消息
             messageService.handleMessage(message);
