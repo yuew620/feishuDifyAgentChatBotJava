@@ -9,14 +9,14 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 public class FeishuCard {
-    private String cardId;
-    private String userId;
-    private String messageId;
-    private String content;
-    private CardStatus status;
-    private LocalDateTime createdAt;
-    private LocalDateTime lastUpdateTime;
-    private long expireTime;
+    String cardId;
+    String userId;
+    String messageId;
+    String content;
+    CardStatus status;
+    LocalDateTime createdAt;
+    LocalDateTime lastUpdateTime;
+    long expireTime;
 
     public enum CardStatus {
         CREATING,    // 卡片正在创建中
@@ -27,6 +27,14 @@ public class FeishuCard {
 
     public boolean isExpired() {
         return System.currentTimeMillis() > expireTime;
+    }
+    
+    public void setExpireTime(long expireTime) {
+        this.expireTime = expireTime;
+    }
+    
+    public String getCardId() {
+        return cardId;
     }
 
     public static FeishuCard createNew(String userId, String messageId) {

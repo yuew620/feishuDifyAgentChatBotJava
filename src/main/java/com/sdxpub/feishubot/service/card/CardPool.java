@@ -109,10 +109,11 @@ public class CardPool {
                     LocalDateTime.now().format(timeFormatter));
             
             try {
-                Message message = Message.builder()
-                    .userId("system")
-                    .messageId("pool-" + System.currentTimeMillis())
-                    .build();
+                Message message = Message.createTextMessage(
+                    "system",
+                    "pool-" + System.currentTimeMillis(),
+                    ""
+                );
                 FeishuCard card = feishuService.createCard(message).get();
                 card.setExpireTime(System.currentTimeMillis() + 24 * 60 * 60 * 1000); // 24小时过期
                 
