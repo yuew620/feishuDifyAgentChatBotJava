@@ -4,19 +4,20 @@ import lombok.*;
 
 import java.time.LocalDateTime;
 
-@Data
+@Getter
+@Setter
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
 public class FeishuCard {
-    String cardId;
-    String userId;
-    String messageId;
-    String content;
-    CardStatus status;
-    LocalDateTime createdAt;
-    LocalDateTime lastUpdateTime;
-    long expireTime;
+    private String cardId;
+    private String userId;
+    private String messageId;
+    private String content;
+    private CardStatus status;
+    private LocalDateTime createdAt;
+    private LocalDateTime lastUpdateTime;
+    private long expireTime;
 
     public enum CardStatus {
         CREATING,    // 卡片正在创建中

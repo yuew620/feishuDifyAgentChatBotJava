@@ -16,10 +16,11 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicInteger;
+import javax.annotation.PostConstruct;
+import org.springframework.scheduling.annotation.Scheduled;
 import com.sdxpub.feishubot.model.message.Message;
-import com.sdxpub.feishubot.service.card.CardPool;
 
 @Service
 public class FeishuServiceImpl implements FeishuService {
@@ -30,12 +31,6 @@ public class FeishuServiceImpl implements FeishuService {
     private final ObjectMapper objectMapper;
     private final DateTimeFormatter timeFormatter = DateTimeFormatter.ofPattern("HH:mm:ss");
 
-    @Autowired
-    public FeishuServiceImpl(OkHttpClient httpClient, FeishuProperties feishuProperties, ObjectMapper objectMapper) {
-        this.httpClient = httpClient;
-        this.feishuProperties = feishuProperties;
-        this.objectMapper = objectMapper;
-    }
 
     private final Map<String, Map<String, FeishuCard>> cardCache = new ConcurrentHashMap<>();
 
@@ -185,13 +180,13 @@ public class FeishuServiceImpl implements FeishuService {
                         ""
                     );
                     FeishuCard card = createCard(message).get();
-                    card.expireTime = System.currentTimeMillis() + 24 * 60 * 60 * 1000; // 24小时过期
+                    card.setExpireTime(System.currentTimeMillis() + 24 * 60 * 60 * 1000); // 24小时过期
                     
                     cardPool.offer(card);
                     poolSize.incrementAndGet();
                     
                     log.info("[CardPool] Successfully created and added new card to pool: {} at {}", 
-                            card.cardId, 
+                            card.getCardId(), 
                             LocalDateTime.now().format(timeFormatter));
                     return;
                 } catch (Exception e) {
@@ -211,7 +206,7 @@ public class FeishuServiceImpl implements FeishuService {
             if (card != null) {
                 poolSize.decrementAndGet();
                 log.info("[CardPool] Got card from pool: {}, remaining cards: {} at {}", 
-                        card.cardId, 
+                        card.getCardId(), 
                         poolSize.get(), 
                         LocalDateTime.now().format(timeFormatter));
 

@@ -4,7 +4,8 @@ import lombok.*;
 
 import java.time.LocalDateTime;
 
-@Data
+@Getter
+@Setter
 @NoArgsConstructor
 @AllArgsConstructor
 public class Message {
@@ -17,11 +18,11 @@ public class Message {
         message.timestamp = LocalDateTime.now();
         return message;
     }
-    String userId;
-    String messageId;
-    String content;
-    MessageType type;
-    LocalDateTime timestamp;
+    private String userId;
+    private String messageId;
+    private String content;
+    private MessageType type;
+    private LocalDateTime timestamp;
     
     public enum MessageType {
         TEXT,
