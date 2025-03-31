@@ -1,0 +1,35 @@
+server:
+  port: 9000
+
+spring:
+  application:
+    name: feishu-dify-bot
+  cache:
+    type: caffeine
+    caffeine:
+      spec: maximumSize=1000,expireAfterWrite=12h
+
+feishu:
+  app-id: ${FEISHU_APP_ID}
+  app-secret: ${FEISHU_APP_SECRET}
+  verification-token: ${FEISHU_VERIFICATION_TOKEN}
+  api-endpoint: https://open.feishu.cn/open-apis
+  chat-id: ${FEISHU_CHAT_ID}
+
+logging:
+  level:
+    com.sdxpub.feishubot: INFO
+  pattern:
+    console: "%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
+  file:
+    name: logs/feishu-bot.log
+    max-size: 100MB
+    max-history: 30
+
+card-pool:
+  initial-size: 20
+  min-size: 5
+  max-retries: 3
+  retry-interval: 1000
+  rebuild-cron: "0 0 0 * * ?"
