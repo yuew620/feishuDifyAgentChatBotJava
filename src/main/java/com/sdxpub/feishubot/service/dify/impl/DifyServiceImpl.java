@@ -126,7 +126,7 @@ public class DifyServiceImpl implements DifyService {
             request.getUser(),
             request.getConversationId() != null ? ",\"conversation_id\":\"" + request.getConversationId() + "\"" : ""
         );
-        return RequestBody.create(jsonBody, mediaType);
+        return RequestBody.create(mediaType, jsonBody);
     }
 
     private static final long SEND_INTERVAL = 100;
