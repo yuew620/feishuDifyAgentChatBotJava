@@ -5,6 +5,9 @@ import lombok.*;
 import java.time.LocalDateTime;
 
 @Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
 public class FeishuCard {
     private String cardId;
     private String userId;
@@ -14,14 +17,6 @@ public class FeishuCard {
     private LocalDateTime createdAt;
     private LocalDateTime lastUpdateTime;
     private long expireTime;
-
-    public void setExpireTime(long expireTime) {
-        this.expireTime = expireTime;
-    }
-
-    public String getCardId() {
-        return cardId;
-    }
 
     public enum CardStatus {
         CREATING,    // 卡片正在创建中
