@@ -21,9 +21,9 @@ import java.util.concurrent.ConcurrentHashMap;
 import com.sdxpub.feishubot.model.message.Message;
 import com.sdxpub.feishubot.service.card.CardPool;
 
-@Slf4j
 @Service
 public class FeishuServiceImpl implements FeishuService {
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(FeishuServiceImpl.class);
     
     private final OkHttpClient httpClient;
     private final FeishuProperties feishuProperties;
@@ -108,13 +108,13 @@ public class FeishuServiceImpl implements FeishuService {
                 String url = feishuProperties.getApiEndpoint() + "/im/v1/messages";
                 
                 Map<String, Object> messageBody = new HashMap<>();
-                messageBody.put("receive_id_type", "chat_id");
+                messageBody.put("receive_id_type", "open_id");
+                messageBody.put("receive_id", message.getUserId());
                 messageBody.put("msg_type", "interactive");
                 messageBody.put("content", String.format(
                     "{\"type\":\"card\",\"data\":{\"card_id\":\"%s\"}}", 
                     finalCard.getCardId()
                 ));
-                messageBody.put("receive_id", feishuProperties.getChatId());
 
                 RequestBody body = RequestBody.create(
                     MediaType.parse("application/json"),
