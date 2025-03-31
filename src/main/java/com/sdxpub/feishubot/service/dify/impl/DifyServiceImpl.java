@@ -8,9 +8,9 @@ import com.sdxpub.feishubot.model.dify.DifyRequest;
 import com.sdxpub.feishubot.model.dify.DifyResponse;
 import com.sdxpub.feishubot.model.message.Message;
 import com.sdxpub.feishubot.service.dify.DifyService;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import okhttp3.*;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.io.BufferedReader;
@@ -22,14 +22,18 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 
-@Slf4j
 @Service
-@RequiredArgsConstructor
 public class DifyServiceImpl implements DifyService {
+    private static final Logger logger = LoggerFactory.getLogger(DifyServiceImpl.class);
 
     private final DifyProperties difyProperties;
     private final OkHttpClient httpClient;
     private final Map<String, String> conversationCache = new ConcurrentHashMap<>();
+
+    public DifyServiceImpl(DifyProperties difyProperties, OkHttpClient httpClient) {
+        this.difyProperties = difyProperties;
+        this.httpClient = httpClient;
+    }
 
     @Override
     public void sendMessage(Message message, Consumer<DifyResponse> onResponse) {
@@ -56,7 +60,7 @@ public class DifyServiceImpl implements DifyService {
             httpClient.newCall(httpRequest).enqueue(new Callback() {
                 @Override
                 public void onFailure(Call call, IOException e) {
-                    log.error("Failed to send request to Dify: {}", e.getMessage());
+                    logger.error("Failed to send request to Dify: {}", e.getMessage());
                     throw new BotException(ErrorCode.DIFY_API_ERROR, e.getMessage());
                 }
 
@@ -68,7 +72,6 @@ public class DifyServiceImpl implements DifyService {
                             throw new BotException(ErrorCode.DIFY_API_ERROR, error);
                         }
 
-                        // 处理流式响应
                         handleStreamingResponse(response, request.getUser(), onResponse);
                     } finally {
                         response.close();
@@ -76,7 +79,7 @@ public class DifyServiceImpl implements DifyService {
                 }
             });
         } catch (Exception e) {
-            log.error("Error sending request to Dify: {}", e.getMessage());
+            logger.error("Error sending request to Dify: {}", e.getMessage());
             throw new BotException(ErrorCode.DIFY_REQUEST_ERROR, e.getMessage());
         }
     }
@@ -126,8 +129,8 @@ public class DifyServiceImpl implements DifyService {
         return RequestBody.create(jsonBody, mediaType);
     }
 
-    private static final long SEND_INTERVAL = 100; // 发送间隔100ms
-    private static final long BUFFER_TIMEOUT = SEND_INTERVAL * 3; // 缓冲区超时时间
+    private static final long SEND_INTERVAL = 100;
+    private static final long BUFFER_TIMEOUT = SEND_INTERVAL * 3;
     private final Map<String, Long> lastSendTimeMap = new ConcurrentHashMap<>();
     private final Map<String, Timer> bufferTimers = new ConcurrentHashMap<>();
 
@@ -137,13 +140,13 @@ public class DifyServiceImpl implements DifyService {
         
         if (lastSendTime == null || currentTime - lastSendTime >= SEND_INTERVAL) {
             DifyResponse bufferedResponse = new DifyResponse(
-                "agent_message",  // event
-                null,            // task
-                null,            // id
-                messageBuffer.toString(), // answer
-                conversationId,  // conversationId
-                null,            // usage
-                null             // message
+                "agent_message",
+                null,
+                null,
+                messageBuffer.toString(),
+                conversationId,
+                null,
+                null
             );
             onResponse.accept(bufferedResponse);
             messageBuffer.setLength(0);
@@ -194,7 +197,6 @@ public class DifyServiceImpl implements DifyService {
                             resetBufferTimer(userId, messageBuffer, onResponse, difyResponse.getConversationId());
                         }
                     } else {
-                        // 非agent_message消息触发发送
                         if (messageBuffer.length() > 0) {
                             sendBufferedMessage(userId, messageBuffer, onResponse, difyResponse.getConversationId());
                         }
