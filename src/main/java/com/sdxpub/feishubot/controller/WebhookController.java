@@ -61,11 +61,15 @@ public class WebhookController {
         }
 
         // 获取消息ID
-        Object messageIdObj = event.get("message_id");
-        if (messageIdObj == null) {
+        Object messageObj = event.get("message");
+        if (messageObj == null) {
+            throw new IllegalArgumentException("Message content is missing");
+        }
+        Map<String, Object> messageData = (Map<String, Object>) messageObj;
+        String messageId = messageData.get("message_id").toString();
+        if (messageId == null) {
             throw new IllegalArgumentException("Message ID is missing");
         }
-        String messageId = messageIdObj.toString();
 
         // 获取发送者ID
         Object senderObj = event.get("sender");
@@ -76,11 +80,6 @@ public class WebhookController {
         String userId = sender.get("sender_id").toString();
 
         // 获取消息内容
-        Object messageObj = event.get("message");
-        if (messageObj == null) {
-            throw new IllegalArgumentException("Message content is missing");
-        }
-        Map<String, Object> messageData = (Map<String, Object>) messageObj;
         String content = messageData.get("content").toString();
         
         log.info("[Webhook] Received message - ID: {}, User: {}, Content: {}", messageId, userId, content);

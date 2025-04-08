@@ -10,8 +10,6 @@ import com.sdxpub.feishubot.model.message.Session;
 import com.sdxpub.feishubot.service.dify.DifyService;
 import com.sdxpub.feishubot.service.feishu.FeishuService;
 import com.sdxpub.feishubot.service.message.MessageService;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Async;
@@ -27,7 +25,6 @@ import com.sdxpub.feishubot.model.dify.DifyMessage;
 import com.sdxpub.feishubot.service.card.CardPool;
 
 @Service
-@RequiredArgsConstructor
 public class MessageServiceImpl implements MessageService {
     private static final Logger log = LoggerFactory.getLogger(MessageServiceImpl.class);
 
@@ -36,9 +33,22 @@ public class MessageServiceImpl implements MessageService {
     private final CardPool cardPool;
     private final Cache<String, Session> sessionCache;
     private final ScheduledExecutorService scheduledExecutor;
-    private final ConcurrentHashMap<String, MessageBuffer> messageBuffers = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, MessageBuffer> messageBuffers;
     private static final long BUFFER_FLUSH_INTERVAL_MS = 100;
     private static final long BUFFER_MAX_TIMEOUT_MS = BUFFER_FLUSH_INTERVAL_MS * 3;
+
+    public MessageServiceImpl(DifyService difyService, 
+                            FeishuService feishuService, 
+                            CardPool cardPool, 
+                            Cache<String, Session> sessionCache, 
+                            ScheduledExecutorService scheduledExecutor) {
+        this.difyService = difyService;
+        this.feishuService = feishuService;
+        this.cardPool = cardPool;
+        this.sessionCache = sessionCache;
+        this.scheduledExecutor = scheduledExecutor;
+        this.messageBuffers = new ConcurrentHashMap<>();
+    }
 
     @Override
     @Async
@@ -72,7 +82,6 @@ public class MessageServiceImpl implements MessageService {
         return CompletableFuture.runAsync(() -> {
             try {
                 log.info("[MessageService] Attempting to get card from pool for message ID: {}", message.getMessageId());
-                // 从卡片池获取预创建的卡片
                 FeishuCard initialCard = cardPool.getCard();
                 if (initialCard == null) {
                     log.error("[MessageService] Failed to get card from pool for message ID: {}", message.getMessageId());
@@ -80,15 +89,12 @@ public class MessageServiceImpl implements MessageService {
                 }
                 log.info("[MessageService] Successfully got card from pool: {}", initialCard.getCardId());
 
-                // 发送卡片给用户
-                log.info("[MessageService] Sending card {} to user for message ID: {}", initialCard.getCardId(), message.getMessageId());
                 feishuService.sendCard(message, initialCard)
                     .thenAccept(success -> {
                         if (success) {
                             buffer.setCardReady(true);
                         } else {
                             log.warn("[MessageService] Failed to send initial card, attempting retry for message ID: {}", message.getMessageId());
-                            // 如果发送失败，可能是卡片过期，重试一次
                             FeishuCard retryCard = cardPool.getCard();
                             if (retryCard != null) {
                                 log.info("[MessageService] Retrying with new card {} for message ID: {}", retryCard.getCardId(), message.getMessageId());
