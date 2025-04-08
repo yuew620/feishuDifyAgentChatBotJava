@@ -124,8 +124,9 @@ public class CardPool {
                 cardPool.offer(card);
                 poolSize.incrementAndGet();
                 
-                log.info("[CardPool] Successfully created and added new card to pool: {} at {}", 
-                        card.getCardId(), 
+                log.info("[CardPool] Successfully created and added new card to pool - ID: {}, Status: {}, at {}", 
+                        card.getCardId(),
+                        card.isReady() ? "READY" : "NOT_READY",
                         LocalDateTime.now().format(timeFormatter));
                 return;
             } catch (Exception e) {
@@ -192,11 +193,74 @@ public class CardPool {
     public CompletableFuture<FeishuCard> createCardForMessage(Message message) {
         return CompletableFuture.supplyAsync(() -> {
             try {
-                FeishuCard card = createCard();
-                // 创建新的卡片实例并设置用户信息
+                // 直接创建消息卡片
+                String url = feishuProperties.getApiEndpoint() + "/cardkit/v1/cards";
+                
+                // 构建卡片实体
+                Map<String, Object> cardData = new HashMap<>();
+                cardData.put("schema", "2.0");
+                
+                // Header
+                Map<String, Object> header = new HashMap<>();
+                Map<String, Object> title = new HashMap<>();
+                title.put("content", "AI助手");
+                title.put("tag", "plain_text");
+                header.put("title", title);
+                cardData.put("header", header);
+                
+                // Config
+                Map<String, Object> config = new HashMap<>();
+                config.put("streaming_mode", true);
+                Map<String, String> summary = new HashMap<>();
+                summary.put("content", "[生成中]");
+                config.put("summary", summary);
+                cardData.put("config", config);
+                
+                // Body
+                Map<String, Object> bodyContent = new HashMap<>();
+                List<Map<String, String>> elements = new ArrayList<>();
+                Map<String, String> markdown = new HashMap<>();
+                markdown.put("tag", "markdown");
+                markdown.put("content", "");
+                markdown.put("element_id", "markdown_1");
+                elements.add(markdown);
+                bodyContent.put("elements", elements);
+                cardData.put("body", bodyContent);
+
+                Map<String, Object> request = new HashMap<>();
+                request.put("type", "card_json");
+                request.put("data", objectMapper.writeValueAsString(cardData));
+
+                RequestBody requestBody = RequestBody.create(
+                    MediaType.parse("application/json"),
+                    objectMapper.writeValueAsString(request)
+                );
+
+                String token = getAccessToken();
+                Request httpRequest = new Request.Builder()
+                    .url(url)
+                    .addHeader("Authorization", "Bearer " + token)
+                    .post(requestBody)
+                    .build();
+
+                Response response = httpClient.newCall(httpRequest).execute();
+                if (!response.isSuccessful() || response.body() == null) {
+                    String errorMsg = response.body() != null ? response.body().string() : "Unknown error";
+                    log.error("[CardCreator] Failed to create card: {}", errorMsg);
+                    throw new Exception("Failed to create card: " + errorMsg);
+                }
+
+                String responseBody = response.body().string();
+                Map<String, Object> responseMap = objectMapper.readValue(responseBody, Map.class);
+                String cardId = (String) responseMap.get("card_id");
+                
                 FeishuCard messageCard = FeishuCard.createNew(message.getUserId(), message.getMessageId());
-                messageCard.setReady(card.getCardId());
+                messageCard.setReady(cardId);
                 messageCard.setExpireTime(System.currentTimeMillis() + 24 * 60 * 60 * 1000); // 24小时过期
+                
+                log.info("[CardCreator] Created card for message - ID: {}, User: {}, Message: {}", 
+                        cardId, message.getUserId(), message.getMessageId());
+                
                 return messageCard;
             } catch (Exception e) {
                 log.error("[CardPool] Error creating card for message: {}", e.getMessage());
