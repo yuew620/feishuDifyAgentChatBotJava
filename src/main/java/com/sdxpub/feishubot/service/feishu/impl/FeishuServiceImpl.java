@@ -16,11 +16,14 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.List;
+import java.util.ArrayList;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import javax.annotation.PostConstruct;
 import org.springframework.scheduling.annotation.Scheduled;
 import com.sdxpub.feishubot.model.message.Message;
+import com.sdxpub.feishubot.service.card.CardPool;
 
 @Service
 public class FeishuServiceImpl implements FeishuService {
@@ -84,178 +87,13 @@ public class FeishuServiceImpl implements FeishuService {
         });
     }
 
-    private final CardPool cardPool;
-
-    private class CardPool {
-        private static final int INITIAL_POOL_SIZE = 20;
-        private static final int MIN_POOL_SIZE = 5;
-        private static final int MAX_RETRIES = 3;
-        private static final long RETRY_INTERVAL = 1000; // 1 second
-        
-        private final ConcurrentLinkedQueue<FeishuCard> cardPool = new ConcurrentLinkedQueue<>();
-        private final AtomicInteger poolSize = new AtomicInteger(0);
-        private final DateTimeFormatter timeFormatter = DateTimeFormatter.ofPattern("HH:mm:ss");
-
-        @PostConstruct
-        public void init() {
-            log.info("[CardPool] Initializing card pool with target size: {}", INITIAL_POOL_SIZE);
-            LocalDateTime startTime = LocalDateTime.now();
-            log.info("[CardPool] ===== Starting initial pool fill with size {} at {} =====", 
-                    INITIAL_POOL_SIZE, 
-                    startTime.format(timeFormatter));
-
-            fillPool();
-
-            log.info("[CardPool] ===== Initial pool fill completed at {}, took {} seconds, current size: {} =====",
-                    LocalDateTime.now().format(timeFormatter),
-                    java.time.Duration.between(startTime, LocalDateTime.now()).getSeconds(),
-                    poolSize.get());
-        }
-
-        @Scheduled(cron = "0 0 0 * * ?") // 每天0点
-        public void rebuildPool() {
-            log.info("[CardPool] Starting daily card pool rebuild at {}", 
-                    LocalDateTime.now().format(timeFormatter));
-            cardPool.clear();
-            poolSize.set(0);
-            fillPool();
-        }
-
-        private void fillPool() {
-            while (true) {
-                int currentSize = poolSize.get();
-                if (currentSize >= INITIAL_POOL_SIZE) {
-                    log.info("[CardPool] Pool filled to target size: {} at {}", 
-                            INITIAL_POOL_SIZE, 
-                            LocalDateTime.now().format(timeFormatter));
-                    break;
-                }
-
-                LocalDateTime cardStartTime = LocalDateTime.now();
-                log.info("[CardPool] >>>>> Creating card {}/{} at {}", 
-                        currentSize + 1, 
-                        INITIAL_POOL_SIZE, 
-                        cardStartTime.format(timeFormatter));
-
-                try {
-                    createCardWithRetry();
-                    log.info("[CardPool] <<<<< Card {}/{} created successfully in {} seconds",
-                            currentSize + 1,
-                            INITIAL_POOL_SIZE,
-                            java.time.Duration.between(cardStartTime, LocalDateTime.now()).getSeconds());
-                } catch (Exception e) {
-                    log.error("[CardPool] !!!!! Failed to create card {}/{}: {}", 
-                            currentSize + 1, 
-                            INITIAL_POOL_SIZE, 
-                            e.getMessage());
-                    continue;
-                }
-
-                try {
-                    Thread.sleep(100); // 避免创建过快
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                    break;
-                }
-            }
-        }
-
-        private void createCardWithRetry() throws Exception {
-            Exception lastException = null;
-            
-            for (int i = 0; i < MAX_RETRIES; i++) {
-                if (i > 0) {
-                    Thread.sleep(RETRY_INTERVAL);
-                }
-
-                log.info("[CardPool] Attempting to create card (attempt {}/{}) at {}", 
-                        i + 1, 
-                        MAX_RETRIES, 
-                        LocalDateTime.now().format(timeFormatter));
-                
-                try {
-                    Message message = Message.createTextMessage(
-                        "system",
-                        "pool-" + System.currentTimeMillis(),
-                        ""
-                    );
-                    FeishuCard card = createCard(message).get();
-                    card.setExpireTime(System.currentTimeMillis() + 24 * 60 * 60 * 1000); // 24小时过期
-                    
-                    cardPool.offer(card);
-                    poolSize.incrementAndGet();
-                    
-                    log.info("[CardPool] Successfully created and added new card to pool: {} at {}", 
-                            card.getCardId(), 
-                            LocalDateTime.now().format(timeFormatter));
-                    return;
-                } catch (Exception e) {
-                    lastException = e;
-                    log.error("[CardPool] Failed to create card (attempt {}/{}): {}", 
-                            i + 1, 
-                            MAX_RETRIES, 
-                            e.getMessage());
-                }
-            }
-
-            throw new Exception("Failed to create card after " + MAX_RETRIES + " attempts", lastException);
-        }
-
-        public FeishuCard getCard() {
-            FeishuCard card = cardPool.poll();
-            if (card != null) {
-                poolSize.decrementAndGet();
-                log.info("[CardPool] Got card from pool: {}, remaining cards: {} at {}", 
-                        card.getCardId(), 
-                        poolSize.get(), 
-                        LocalDateTime.now().format(timeFormatter));
-
-                // 异步创建新卡片补充到池中
-                CompletableFuture.runAsync(() -> {
-                    try {
-                        createCardWithRetry();
-                    } catch (Exception e) {
-                        log.error("Failed to create replacement card: {}", e.getMessage());
-                        // 继续尝试创建，避免池子逐渐缩小
-                        CompletableFuture.runAsync(() -> {
-                            try {
-                                createCardWithRetry();
-                            } catch (Exception ex) {
-                                log.error("Failed to create replacement card in second attempt: {}", ex.getMessage());
-                            }
-                        });
-                    }
-                });
-
-                return card;
-            }
-
-            // 如果没有可用卡片，同步创建一个
-            log.info("[CardPool] No cards available in pool, creating new one at {}", 
-                    LocalDateTime.now().format(timeFormatter));
-            try {
-                createCardWithRetry();
-                card = cardPool.poll();
-                if (card != null) {
-                    poolSize.decrementAndGet();
-                }
-                return card;
-            } catch (Exception e) {
-                log.error("Failed to create card when pool is empty: {}", e.getMessage());
-                return null;
-            }
-        }
-
-        public int getPoolSize() {
-            return poolSize.get();
-        }
-    }
+    @Autowired
+    private CardPool cardPool;
 
     public FeishuServiceImpl(OkHttpClient httpClient, FeishuProperties feishuProperties, ObjectMapper objectMapper) {
         this.httpClient = httpClient;
         this.feishuProperties = feishuProperties;
         this.objectMapper = objectMapper;
-        this.cardPool = new CardPool();
     }
 
     @Override
@@ -418,58 +256,40 @@ public class FeishuServiceImpl implements FeishuService {
     }
 
     private String buildCardContent() throws Exception {
-        Map<String, Object> card = new HashMap<>();
+        Map<String, Object> cardData = new HashMap<>();
+        cardData.put("schema", "2.0");
         
-        // 基本配置
+        // Header
+        Map<String, Object> header = new HashMap<>();
+        Map<String, Object> title = new HashMap<>();
+        title.put("content", "AI助手");
+        title.put("tag", "plain_text");
+        header.put("title", title);
+        cardData.put("header", header);
+        
+        // Config
         Map<String, Object> config = new HashMap<>();
-        config.put("wide_screen_mode", true);
         config.put("streaming_mode", true);
-        config.put("summary", new HashMap<String, String>() {{
-            put("content", "[生成中]");
-        }});
+        Map<String, String> summary = new HashMap<>();
+        summary.put("content", "[生成中]");
+        config.put("summary", summary);
+        cardData.put("config", config);
         
-        // 流式更新配置
-        Map<String, Object> streamingConfig = new HashMap<>();
-        Map<String, Integer> printFrequency = new HashMap<>();
-        printFrequency.put("default", 30);
-        printFrequency.put("android", 25);
-        printFrequency.put("ios", 40);
-        printFrequency.put("pc", 50);
-        streamingConfig.put("print_frequency_ms", printFrequency);
-        
-        Map<String, Integer> printStep = new HashMap<>();
-        printStep.put("default", 2);
-        printStep.put("android", 3);
-        printStep.put("ios", 4);
-        printStep.put("pc", 5);
-        streamingConfig.put("print_step", printStep);
-        streamingConfig.put("print_strategy", "fast");
-        
-        config.put("streaming_config", streamingConfig);
-        card.put("config", config);
-        
-        // 卡片结构
-        card.put("schema", "2.0");
-        card.put("header", new HashMap<String, Object>() {{
-            put("title", new HashMap<String, String>() {{
-                put("content", "AI助手");
-                put("tag", "plain_text");
-            }});
-        }});
-        
-        card.put("body", new HashMap<String, Object>() {{
-            put("elements", new Object[]{
-                new HashMap<String, String>() {{
-                    put("tag", "markdown");
-                    put("content", "");
-                    put("element_id", "markdown_1");
-                }}
-            });
-        }});
+        // Body
+        Map<String, Object> body = new HashMap<>();
+        List<Map<String, String>> elements = new ArrayList<>();
+        Map<String, String> markdown = new HashMap<>();
+        markdown.put("tag", "markdown");
+        markdown.put("content", "");
+        markdown.put("element_id", "markdown_1");
+        elements.add(markdown);
+        body.put("elements", elements);
+        cardData.put("body", body);
 
-        return objectMapper.writeValueAsString(new HashMap<String, Object>() {{
-            put("type", "card_json");
-            put("data", objectMapper.writeValueAsString(card));
-        }});
+        Map<String, Object> request = new HashMap<>();
+        request.put("type", "card_json");
+        request.put("data", objectMapper.writeValueAsString(cardData));
+        
+        return objectMapper.writeValueAsString(request);
     }
 }
