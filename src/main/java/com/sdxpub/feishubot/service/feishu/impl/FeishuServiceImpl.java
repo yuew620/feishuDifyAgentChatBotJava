@@ -68,8 +68,8 @@ public class FeishuServiceImpl implements FeishuService {
                     Map<String, Object> responseMap = objectMapper.readValue(responseBody, Map.class);
                     String cardId = (String) responseMap.get("card_id");
                     
-                    FeishuCard card = new FeishuCard();
-                    card.setCardId(cardId);
+                    FeishuCard card = FeishuCard.createNew(message.getUserId(), message.getMessageId());
+                    card.setReady(cardId);
                     
                     // 缓存卡片信息
                     cardCache.computeIfAbsent(message.getUserId(), k -> new ConcurrentHashMap<>())
