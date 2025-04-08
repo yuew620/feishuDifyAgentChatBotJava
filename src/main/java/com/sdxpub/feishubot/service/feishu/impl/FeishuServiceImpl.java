@@ -37,58 +37,18 @@ public class FeishuServiceImpl implements FeishuService {
 
     private final Map<String, Map<String, FeishuCard>> cardCache = new ConcurrentHashMap<>();
 
-    @Override
-    public CompletableFuture<FeishuCard> createCard(Message message) {
-        return CompletableFuture.supplyAsync(() -> {
-            try {
-                Instant startTime = Instant.now();
-                log.info("[CardCreator] Starting card entity creation at {}", 
-                        LocalDateTime.now().format(timeFormatter));
-
-                String url = feishuProperties.getApiEndpoint() + "/cardkit/v1/cards";
-        
-                // 构建卡片实体
-                RequestBody body = RequestBody.create(
-                    MediaType.parse("application/json"), 
-                    buildCardContent()
-                );
-
-                String token = getAccessToken();
-                Request request = new Request.Builder()
-                    .url(url)
-                    .addHeader("Authorization", "Bearer " + token)
-                    .post(body)
-                    .build();
-
-                try (Response response = httpClient.newCall(request).execute()) {
-                    if (!response.isSuccessful() || response.body() == null) {
-                        String errorMsg = response.body() != null ? response.body().string() : "Unknown error";
-                        log.error("[CardCreator] Failed to create card: {}", errorMsg);
-                        throw new Exception("Failed to create card: " + errorMsg);
-                    }
-
-                    String responseBody = response.body().string();
-                    Map<String, Object> responseMap = objectMapper.readValue(responseBody, Map.class);
-                    String cardId = (String) responseMap.get("card_id");
-                    
-                    FeishuCard card = FeishuCard.createNew(message.getUserId(), message.getMessageId());
-                    card.setReady(cardId);
-                    
-                    // 缓存卡片信息
-                    cardCache.computeIfAbsent(message.getUserId(), k -> new ConcurrentHashMap<>())
-                            .put(message.getMessageId(), card);
-                    
-                    return card;
-                }
-            } catch (Exception e) {
-                log.error("[CardCreator] Error creating card: {}", e.getMessage());
-                throw new RuntimeException("Error creating card", e);
-            }
-        });
-    }
-
     @Autowired
     private CardPool cardPool;
+
+    @Override
+    public CompletableFuture<FeishuCard> createCard(Message message) {
+        return cardPool.createCardForMessage(message).thenApply(card -> {
+            // 缓存卡片信息
+            cardCache.computeIfAbsent(message.getUserId(), k -> new ConcurrentHashMap<>())
+                    .put(message.getMessageId(), card);
+            return card;
+        });
+    }
 
     public FeishuServiceImpl(OkHttpClient httpClient, FeishuProperties feishuProperties, ObjectMapper objectMapper) {
         this.httpClient = httpClient;
@@ -255,41 +215,4 @@ public class FeishuServiceImpl implements FeishuService {
         }
     }
 
-    private String buildCardContent() throws Exception {
-        Map<String, Object> cardData = new HashMap<>();
-        cardData.put("schema", "2.0");
-        
-        // Header
-        Map<String, Object> header = new HashMap<>();
-        Map<String, Object> title = new HashMap<>();
-        title.put("content", "AI助手");
-        title.put("tag", "plain_text");
-        header.put("title", title);
-        cardData.put("header", header);
-        
-        // Config
-        Map<String, Object> config = new HashMap<>();
-        config.put("streaming_mode", true);
-        Map<String, String> summary = new HashMap<>();
-        summary.put("content", "[生成中]");
-        config.put("summary", summary);
-        cardData.put("config", config);
-        
-        // Body
-        Map<String, Object> body = new HashMap<>();
-        List<Map<String, String>> elements = new ArrayList<>();
-        Map<String, String> markdown = new HashMap<>();
-        markdown.put("tag", "markdown");
-        markdown.put("content", "");
-        markdown.put("element_id", "markdown_1");
-        elements.add(markdown);
-        body.put("elements", elements);
-        cardData.put("body", body);
-
-        Map<String, Object> request = new HashMap<>();
-        request.put("type", "card_json");
-        request.put("data", objectMapper.writeValueAsString(cardData));
-        
-        return objectMapper.writeValueAsString(request);
-    }
 }
